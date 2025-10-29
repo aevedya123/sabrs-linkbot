@@ -1,84 +1,54 @@
 import os
 import discord
-from discord.ext import tasks, commands
 import requests
 import asyncio
-from keep_alive import keep_alive
-keep_alive()
 
-# Load environment variables
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 GROUP_ID = os.getenv("GROUP_ID")
-ROBLOX_COOKIE = os.getenv("ROBLOX_COOKIE")
+COOKIE = os.getenv("ROBLOX_COOKIE")
 
 intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="!", intents=intents)
+client = discord.Client(intents=intents)
 
-# To track already sent links
-sent_links = set()
+sent = set()
 
-def fetch_links():
-    """Fetch the latest posts from Roblox group wall and extract links."""
+async def get_links():
     url = f"https://groups.roblox.com/v2/groups/{GROUP_ID}/wall/posts"
     headers = {
-        "Cookie": f".ROBLOSECURITY={ROBLOX_COOKIE}",
+        "Cookie": f".ROBLOSECURITY={COOKIE}",
         "User-Agent": "Mozilla/5.0"
     }
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        r = requests.get(url, headers=headers, timeout=10)
+        data = r.json()
         posts = data.get("data", [])
         links = []
-
         for post in posts:
-            content = post.get("body", "")
-            # Extract all links
-            words = content.split()
-            for word in words:
+            for word in post.get("body", "").split():
                 if word.startswith("http://") or word.startswith("https://"):
                     links.append(word)
-
-        # Remove duplicates
-        unique_links = list(dict.fromkeys(links))
-        return unique_links[:20]  # Limit to around 20 per fetch
-
+        return list(dict.fromkeys(links))[:20]
     except Exception as e:
-        print(f"⚠️ Error fetching links: {e}")
+        print("Error:", e)
         return []
 
-@tasks.loop(minutes=1)
-async def fetch_and_send_links():
-    """Fetch new links every minute and send to Discord."""
-    try:
-        channel = bot.get_channel(CHANNEL_ID)
-        if not channel:
-            print("❌ Channel not found. Check CHANNEL_ID.")
-            return
-
-        links = fetch_links()
-        new_links = [link for link in links if link not in sent_links]
-
-        if new_links:
-            sent_links.update(new_links)
-            embed = discord.Embed(
-                title="🕹️ New Roblox Group Links",
-                description="\n".join(new_links),
-                color=discord.Color.blue()
-            )
-            await channel.send(embed=embed)
-            print(f"✅ Sent {len(new_links)} new links.")
-        else:
-            print("ℹ️ No new links found.")
-
-    except Exception as e:
-        print(f"⚠️ Error sending links: {e}")
-
-@bot.event
+@client.event
 async def on_ready():
-    print(f"✅ Logged in as {bot.user}")
-    fetch_and_send_links.start()
+    print(f"Logged in as {client.user}")
+    channel = client.get_channel(CHANNEL_ID)
+    while True:
+        try:
+            links = await asyncio.to_thread(get_links)
+            new = [l for l in links if l not in sent]
+            if new:
+                sent.update(new)
+                await channel.send("\n".join(new))
+                print(f"Sent {len(new)} new links.")
+            else:
+                print("No new links.")
+        except Exception as e:
+            print("Loop error:", e)
+        await asyncio.sleep(60)  # every 1 minute
 
-if __name__ == "__main__":
-    bot.run(DISCORD_TOKEN)
+client.run(TOKEN)
