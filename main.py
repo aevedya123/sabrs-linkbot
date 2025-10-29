@@ -4,6 +4,8 @@ import aiohttp
 import asyncio
 import re
 from discord.ext import tasks
+from keep_alive import keep_alive
+keep_alive()
 
 # Environment variables
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
