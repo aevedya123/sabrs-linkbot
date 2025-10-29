@@ -4,7 +4,7 @@ import requests
 import discord
 from discord.ext import tasks, commands
 from dotenv import load_dotenv
-
+from keep_alive import keep_alive
 load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -105,3 +105,4 @@ if __name__ == "__main__":
     t = Thread(target=run_flask, daemon=True)
     t.start()
     client.run(DISCORD_TOKEN)
+keep_alive()
