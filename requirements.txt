@@ -1,6 +1,6 @@
 PyNaCl
 ffmpeg-python
 aiohttp>=3.8.0
-discord.py==2.3.2
+py-cord==2.5.0
 flask>=2.0
 requests
