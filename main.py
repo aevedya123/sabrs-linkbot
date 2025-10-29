@@ -2,7 +2,8 @@ import os
 import discord
 import requests
 import asyncio
-
+from keep_alive import keep_alive
+keep_alive()
 TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 GROUP_ID = os.getenv("GROUP_ID")
