@@ -48,7 +48,7 @@ def save_posted(posted_set):
     except:
         pass
 
-async def fetch_group_wall(session, limit=50):
+async def fetch_group_wall(session, limit=20):
     url = f"https://groups.roblox.com/v2/groups/{GROUP_ID}/wall/posts?limit={limit}&sortOrder=Desc"
     headers = {
         "User-Agent": USER_AGENT,
@@ -81,7 +81,8 @@ async def poll_loop():
             try:
                 if backoff_seconds > 0:
                     await asyncio.sleep(backoff_seconds)
-                posts = await fetch_group_wall(session, limit=50)
+                posts = await fetch_group_wall(session, limit=20) 
+                
                 new_items = []
                 for post in reversed(posts):
                     body = post.get("body", "") or ""
