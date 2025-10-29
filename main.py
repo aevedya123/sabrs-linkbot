@@ -1,12 +1,12 @@
 import os
-import time
-import requests
 import discord
 from discord.ext import tasks, commands
-from dotenv import load_dotenv
+import requests
+import asyncio
 from keep_alive import keep_alive
-load_dotenv()
+keep_alive()
 
+# Load environment variables
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 GROUP_ID = os.getenv("GROUP_ID")
@@ -15,94 +15,70 @@ ROBLOX_COOKIE = os.getenv("ROBLOX_COOKIE")
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-@bot.event
-async def on_ready():
-    print(f"✅ Logged in as {bot.user}")
-    post_links.start()
+# To track already sent links
+sent_links = set()
 
-@tasks.loop(minutes=1)
-async def post_links():
-    """Fetches ~20 latest group wall posts and sends unique ones to Discord."""
-    channel = bot.get_channel(CHANNEL_ID)
-    if not channel:
-        print("⚠️ Channel not found. Check CHANNEL_ID.")
-        return
-
+def fetch_links():
+    """Fetch the latest posts from Roblox group wall and extract links."""
+    url = f"https://groups.roblox.com/v2/groups/{GROUP_ID}/wall/posts"
     headers = {
         "Cookie": f".ROBLOSECURITY={ROBLOX_COOKIE}",
-        "User-Agent": "RobloxWallFetcher/1.0",
-        "Accept": "application/json"
+        "User-Agent": "Mozilla/5.0"
     }
-
-    url = f"https://groups.roblox.com/v1/groups/{GROUP_ID}/wall/posts?limit=20&sortOrder=Desc"
-
     try:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
-
-        # Ensure valid response
-        if "data" not in data:
-            print("⚠️ Invalid data received.")
-            return
-
-        posts = data["data"]
-        print(f"Fetched {len(posts)} posts.")
-
-        # Keep track of posted IDs
-        if not hasattr(post_links, "posted_ids"):
-            post_links.posted_ids = set()
+        posts = data.get("data", [])
+        links = []
 
         for post in posts:
-            post_id = post.get("id")
-            if post_id and post_id not in post_links.posted_ids:
-                content = post.get("body", "").strip()
-                if content:
-                    msg = f"💬 **New Wall Post:** {content[:1900]}"  # truncate if too long
-                    await channel.send(msg)
-                post_links.posted_ids.add(post_id)
+            content = post.get("body", "")
+            # Extract all links
+            words = content.split()
+            for word in words:
+                if word.startswith("http://") or word.startswith("https://"):
+                    links.append(word)
 
-    except requests.exceptions.RequestException as e:
-        print(f"🌐 Network error: {e}")
+        # Remove duplicates
+        unique_links = list(dict.fromkeys(links))
+        return unique_links[:20]  # Limit to around 20 per fetch
+
     except Exception as e:
-        print(f"⚠️ Unexpected error: {e}")
+        print(f"⚠️ Error fetching links: {e}")
+        return []
 
-bot.run(DISCORD_TOKEN)                            try:
-                                await channel.send(embed=embed)
-                            except:
-                                continue
-                        for _, key in new_items:
-                            posted.add(key)
-                        save_posted(posted)
-                backoff_seconds = 0
-                await asyncio.sleep(CHECK_INTERVAL)
-            except RuntimeError as rte:
-                if str(rte) == "ROBLOX_RATE_LIMIT":
-                    backoff_seconds = max(60, (backoff_seconds or 60) * 2)
-                    backoff_seconds = min(backoff_seconds, 3600)
-                    await asyncio.sleep(backoff_seconds)
-                else:
-                    await asyncio.sleep(60)
-            except:
-                await asyncio.sleep(60)
+@tasks.loop(minutes=1)
+async def fetch_and_send_links():
+    """Fetch new links every minute and send to Discord."""
+    try:
+        channel = bot.get_channel(CHANNEL_ID)
+        if not channel:
+            print("❌ Channel not found. Check CHANNEL_ID.")
+            return
 
-app = Flask("keepalive")
+        links = fetch_links()
+        new_links = [link for link in links if link not in sent_links]
 
-@app.route("/")
-def home():
-    return "SABRS-LinkBot - running"
+        if new_links:
+            sent_links.update(new_links)
+            embed = discord.Embed(
+                title="🕹️ New Roblox Group Links",
+                description="\n".join(new_links),
+                color=discord.Color.blue()
+            )
+            await channel.send(embed=embed)
+            print(f"✅ Sent {len(new_links)} new links.")
+        else:
+            print("ℹ️ No new links found.")
 
-def run_flask():
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    except Exception as e:
+        print(f"⚠️ Error sending links: {e}")
 
-@client.event
+@bot.event
 async def on_ready():
-    if not getattr(client, "_polling_started", False):
-        client._polling_started = True
-        client.loop.create_task(poll_loop())
+    print(f"✅ Logged in as {bot.user}")
+    fetch_and_send_links.start()
 
 if __name__ == "__main__":
-    t = Thread(target=run_flask, daemon=True)
-    t.start()
-    client.run(DISCORD_TOKEN)
-keep_alive()
+    bot.run(DISCORD_TOKEN)
