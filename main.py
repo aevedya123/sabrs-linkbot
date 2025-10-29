@@ -3,6 +3,7 @@ import requests
 import re
 import asyncio
 import discord
+from keep_alive import keep_alive
 from discord.ext import tasks
 from datetime import datetime, timezone
 
@@ -80,5 +81,5 @@ async def fetch_and_send_links():
 async def on_ready():
     print(f"🤖 Logged in as {client.user}")
     fetch_and_send_links.start()
-
+keep_alive()
 client.run(DISCORD_TOKEN)
